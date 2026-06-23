@@ -17,10 +17,10 @@ data = data %>%
          WeekOfYear=week_of_year) %>% filter(t <= t_cutoff)
 
 # index of missing cells for INLA to predict
-index.missing <- which(is.na(data$Y))
+index.missing = which(is.na(data$Y))
 
 # half normal prior
-half_normal_sd <- function(sigma) {
+half_normal_sd = function(sigma) {
   paste("expression:
             sigma = ", sigma, ";
             precision = exp(log_precision);
@@ -29,7 +29,7 @@ half_normal_sd <- function(sigma) {
             return(logdens + log_jacobian);", sep = "")}
 
 # model formula
-model_formula <- Y ~ 1 +
+model_formula = Y ~ 1 +
   f(Time, model = "rw1", constr = TRUE,
     hyper = list("prec" = list(prior = half_normal_sd(0.1)))) +
   f(Delay, model = "rw1", constr = TRUE,
@@ -40,7 +40,7 @@ model_formula <- Y ~ 1 +
     hyper = list("prec" = list(prior = half_normal_sd(1))))
 
 # fit model
-output <- inla(
+output = inla(
   model_formula,
   family = "nbinomial",
   data   = data,
@@ -51,42 +51,38 @@ output <- inla(
     hyper = list("theta" = list(prior = "loggamma", param = c(1, 0.1)))))
 
 # posterior sampling — INLA version
-n_sims <- 1000
+n_sims = 1000
 
 # step 1: sample from approximate joint posterior
-inla_samples_list <- inla.posterior.sample(n_sims, output)
+inla_samples_list = inla.posterior.sample(n_sims, output)
 
 # step 2: sample counts for missing cells from negative binomial
-vector_samples <- lapply(
+vector_samples = lapply(
   inla_samples_list,
   function(x) {
     rnbinom(
-      n    = length(index.missing),
-      mu   = exp(x$latent[index.missing]),
-      size = x$hyperpar[1])})
+      n=length(index.missing),
+      mu=exp(x$latent[index.missing]),
+      size=x$hyperpar[1])})
 
-# step 3: reconstruct full grid and aggregate to weekly totals
-weekly_list <- lapply(vector_samples, function(sample_vec) {
-  data_aux                   <- data
-  data_aux$Y[index.missing]  <- sample_vec
-  data_aux %>%
-    group_by(date) %>%
-    summarise(Y = sum(Y), .groups = "drop")})
+# step 3: fill in missing cells and keep cell-level structure
+cell_samples_mat = sapply(vector_samples, function(sample_vec) {
+  data_aux = data
+  data_aux$Y[index.missing] = sample_vec
+  data_aux$Y})
 
-# build weekly samples matrix (weeks x simulations)
-weekly_samples_mat <- sapply(weekly_list, function(df) df$Y)
-rownames(weekly_samples_mat) <- as.character(weekly_list[[1]]$date)
-
-# credible intervals
-N_hat <- apply(weekly_samples_mat, 1, mean)
-N_lo  <- apply(weekly_samples_mat, 1, quantile, probs = 0.025)
-N_hi  <- apply(weekly_samples_mat, 1, quantile, probs = 0.975)
-
-# summarise
-inla_nowcast = data.frame(date  = as.Date(rownames(weekly_samples_mat)), N_hat = N_hat, N_lo  = N_lo, N_hi  = N_hi)
-
-# export
 output_dir = dirname(data_path)
-write.csv(inla_nowcast, file.path(output_dir, paste0("inla_pred_", t_cutoff, ".csv")), row.names = FALSE)
-write.csv(as.data.frame(weekly_samples_mat), file.path(output_dir, paste0("inla_posterior_", t_cutoff, ".csv")),
-  row.names = TRUE)
+
+# cell-level point predictions
+data$pred = rowMeans(cell_samples_mat)
+write.csv(data,
+          file.path(output_dir, paste0("inla_pred_", t_cutoff, ".csv")),
+          row.names = FALSE)
+
+# weekly posterior samples (summed across delays)
+weekly_samples_mat = apply(cell_samples_mat, 2, function(sim) {
+  tapply(sim, data$date, sum)
+})
+write.csv(as.data.frame(weekly_samples_mat),
+          file.path(output_dir, paste0("inla_posterior_", t_cutoff, ".csv")),
+          row.names = TRUE)
