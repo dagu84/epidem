@@ -15,7 +15,7 @@ def make_linelist():
 
 
 def make_triangle():
-    dates = pd.date_range('2020-01-06', periods=104, freq='W-MON')
+    dates = pd.date_range('2021-01-04', periods=104, freq='W-MON')
     return pd.DataFrame({'date': dates, 'n_td': range(104)})
 
 
@@ -72,7 +72,7 @@ class TestToMemFormat:
         assert all(c.startswith('Season_') for c in result.columns)
 
     def test_incomplete_years_dropped(self):
-        dates = pd.date_range('2020-01-06', periods=52, freq='W-MON')
+        dates = pd.date_range('2021-01-04', periods=53, freq='W-MON')
         df = pd.DataFrame({'date': dates, 'n_td': 1})
         result = to_mem_format(df)
         assert result.shape[1] == 1
