@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 from unittest.mock import patch, MagicMock
-from package.model import run_mem, create_and_train_gam, create_and_train_inla
+from package.model import run_mem, create_and_train_gam, create_and_train_inla, CODING_DIR
 
 
 def mock_success():
@@ -40,7 +40,7 @@ class TestRunMem:
         mock_csv.return_value = pd.DataFrame()
         run_mem('mem.r', '/data/input.csv', 'sari')
         mock_run.assert_called_once_with(
-            ['Rscript', 'mem.r', '/data/input.csv', 'sari'],
+            ['Rscript', str(CODING_DIR / 'mem.r'), '/data/input.csv', 'sari'],
             capture_output=True, text=True)
 
 
@@ -67,7 +67,7 @@ class TestCreateAndTrainGam:
         mock_csv.return_value = pd.DataFrame()
         create_and_train_gam('gam.r', '/data/input.csv', 40)
         mock_run.assert_called_once_with(
-            ['Rscript', 'gam.r', '/data/input.csv', '40'],
+            ['Rscript', str(CODING_DIR / 'gam.r'), '/data/input.csv', '40'],
             capture_output=True, text=True)
 
     @patch('package.model.pd.read_csv')
@@ -103,5 +103,5 @@ class TestCreateAndTrainInla:
         mock_csv.return_value = pd.DataFrame()
         create_and_train_inla('inla.r', '/data/input.csv', 40)
         mock_run.assert_called_once_with(
-            ['Rscript', 'inla.r', '/data/input.csv', '40'],
+            ['Rscript', str(CODING_DIR / 'inla.r'), '/data/input.csv', '40'],
             capture_output=True, text=True)

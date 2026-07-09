@@ -11,7 +11,7 @@ def export(df:pd.DataFrame, file_name:str):
 
     file_path = data_dir / f'{file_name}.csv'
     df.to_csv(file_path, index=False)
-    return print(f'executed, file {file_name} saved to {file_path}.csv')
+    return print(f'executed, file {file_name} saved to {file_path}')
 
 
 def process_to_triangle(df:pd.DataFrame, d:int=10):
@@ -125,52 +125,124 @@ def to_mem_format(df:pd.DataFrame, date_col:str="date", value_col:bool="n_td"):
     return wide
 
 
-def mem_and_phase_labels(df:pd.DataFrame, moderate:float, high:float, very_high:float):
+def mem_and_phase_labels(df: pd.DataFrame, moderate: float, high: float, very_high: float):
     """
-    Classify weekly case counts into intensity regimes and trend phases.
+    Classify weekly case counts into intensity regimes and trend phases,
+    then merge labels back onto the original long-format run-off triangle.
 
-    Expects a pre-aggregated weekly dataframe (one row per date). Assigns
-    each week a `regime` label ('baseline', 'moderate', 'high', 'very high')
-    based on fixed thresholds applied to `n_td`. Also computes a 3-week
-    trend (`n_td` change over a 3-week lag) and classifies each week's
-    `phase` as 'rising', 'declining', or 'stable' based on the sign of
-    that trend.
+    Aggregates the input dataframe to weekly totals, assigns each week a
+    `regime` label ('baseline', 'moderate', 'high', 'very high') based on
+    fixed MEM thresholds, computes a 3-week trend and classifies each week's
+    `phase` as 'rising', 'declining', or 'stable'. Labels are then merged
+    back onto the original long-format dataframe so each (date, delay) row
+    carries the regime and phase of its onset week.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Pre-aggregated weekly data containing 'date' and 'n_td' columns
-        (one row per date).
+        Long-format run-off triangle with one row per (date, delay) cell.
+        Must contain 'date' and 'n_td' columns.
     moderate : float
-        Lower threshold for the 'moderate' regime.
+        Lower threshold for the 'moderate' regime (MEM epidemic threshold).
     high : float
-        Lower threshold for the 'high' regime.
+        Lower threshold for the 'high' regime (MEM 90th percentile threshold).
     very_high : float
-        Lower threshold for the 'very high' regime.
+        Lower threshold for the 'very high' regime (MEM 97.5th percentile threshold).
 
     Returns
     -------
     pd.DataFrame
-        Weekly data with columns: 'date', 'n_td', 'regime', 'trend',
-        and 'phase'.
+        Original long-format dataframe with two additional columns:
+        'regime' and 'phase', derived from the weekly total n_td.
     """
 
-    # create the regime column using statements
-    df['regime'] = df['n_td'].apply(lambda x: 'baseline' if x < moderate
-        else 'moderate' if x < high
-        else 'high' if x < very_high
-        else 'very high')
+    # aggregate to weekly totals
+    weekly = (
+        df.groupby('date', as_index=False)['n_td']
+          .sum()
+          .rename(columns={'n_td': 'N_t'})
+          .sort_values('date')
+    )
 
-    # creating the 3 phases of cases
-    df = df.sort_values('date').copy()
-    df['trend'] = df['n_td'].diff(3)  # change over `window` weeks
-    df['phase'] = df['trend'].apply(
-        lambda x: 'rising' if x > 0 else 'declining' if x < 0 else 'stable')
+    # regime labels
+    weekly['regime'] = weekly['N_t'].apply(
+        lambda x: 'baseline'  if x < moderate  else
+                  'moderate'  if x < high       else
+                  'high'      if x < very_high  else
+                  'very high'
+    )
+
+    # trend and phase
+    weekly['trend'] = weekly['N_t'].diff(3)
+    weekly['phase'] = weekly['trend'].apply(
+        lambda x: 'rising'   if x > 0 else
+                  'declining' if x < 0 else
+                  'stable'
+    )
+
+    # merge back onto original long format
+    df = df.merge(weekly[['date', 'regime', 'phase']], on='date', how='left')
 
     return df
 
 
-def functions():
+def select_cutoffs(df: pd.DataFrame, min_training_weeks: int=30):
     """
+    Select T_cutoff candidates from a labelled long-format dataframe.
+
+    Identifies distinct episodes of each regime x phase combination by
+    detecting transitions — a new episode begins whenever the combination
+    changes from the previous week. Returns the first date of each unique
+    regime x phase combination as a T_cutoff candidate.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Long-format dataframe with columns: date, t, regime, phase.
+        Must have one row per (date, delay) cell.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per unique regime x phase combination, with columns:
+        date, t, regime, phase. Sorted by date.
     """
-    return None
+
+    # collapse to one row per date
+    weekly = (
+        df[['date', 't', 'regime', 'phase']]
+          .drop_duplicates(subset='date')
+          .sort_values('date')
+          .reset_index(drop=True)
+    )
+
+    # transition detection
+    weekly['regime_phase'] = weekly['regime'] + '_' + weekly['phase']
+    weekly['is_new_episode'] = (
+        weekly['regime_phase'] != weekly['regime_phase'].shift(1)
+    )
+    weekly['episode_id'] = weekly['is_new_episode'].cumsum()
+
+    # first date of each episode
+    episodes = (
+        weekly.groupby('episode_id')
+              .first()
+              .reset_index()
+              [['date', 't', 'regime', 'phase']]
+    )
+
+    # filter: only keep episodes with enough training data before them
+    episodes = episodes[episodes['t'] >= min_training_weeks]
+
+    # first qualifying episode per unique regime x phase
+    cutoffs = (
+        episodes
+        .groupby(['regime', 'phase'])
+        .first()
+        .reset_index()
+        [['date', 't', 'regime', 'phase']]
+        .sort_values('date')
+        .reset_index(drop=True)
+    )
+
+    return cutoffs

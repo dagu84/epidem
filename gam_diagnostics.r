@@ -1,14 +1,11 @@
 library(mgcv)
 library(dplyr)
 
-# importing arguments from python function
-args = commandArgs(trailingOnly = TRUE)
-t_cutoff = as.integer(args[2])
-data_path = args[1]
+# data import
+data = read.csv('data/untrimmed_data.csv')
 
-# loading the data
-data = read.csv(data_path)
-data$date = as.Date(data$date)
+# cutoff
+t_cutoff = 30
 
 # applying cutoff
 data = data %>%
@@ -25,7 +22,6 @@ model = gam(
 
 # predict
 data$pred = predict(model,newdata=data,type="response")
-write.csv(data, file.path(dirname(data_path), paste0("gam_pred_", t_cutoff, ".csv")), row.names = FALSE)
 
 # posterior
 beta_hat = coef(model)
@@ -45,9 +41,8 @@ N_hat = apply(weekly_samples, 1, mean)
 N_lo = apply(weekly_samples, 1, quantile, 0.025)
 N_hi = apply(weekly_samples, 1, quantile, 0.975)
 
-# export
-nowcast = data.frame(date = as.Date(rownames(weekly_samples)), N_hat = N_hat, N_lo  = N_lo, N_hi  = N_hi)
+# DIAGNOSTICS
+gam.check(model)
+summary(model)
 
-write.csv(nowcast, file.path(dirname(data_path), paste0("gam_ci_", t_cutoff, ".csv")), row.names = FALSE)
 
-write.csv(as.data.frame(weekly_samples), file.path(dirname(data_path), paste0("gam_posterior_", t_cutoff, ".csv")), row.names = TRUE)

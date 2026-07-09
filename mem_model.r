@@ -11,7 +11,7 @@ data = read.csv(data_path)
 
 # model
 epi = memmodel(data)
-output = as.data.frame(epi$intensity.thresholds
+output = as.data.frame(epi$intensity.thresholds)
 
 # export
 output_path = file.path(dirname(data_path), paste0("mem_threshold_", disease, ".csv"))
