@@ -1,5 +1,6 @@
 import os
 import subprocess
+import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -144,3 +145,27 @@ def create_and_train_inla(r_path:str, data_path:str, end_cutoff:int):
     posterior = pd.read_csv(os.path.join(os.path.dirname(data_path), f"inla_posterior_{end_cutoff}.csv"),index_col=0)
 
     return pred, posterior
+
+
+def crps_eval(draws, y_obs):
+    """
+    draws: (n_draws, n_cells) posterior draws
+    y_obs: (n_cells,) observed values (the NaN triangle, now realized/held out)
+    returns: (n_cells,) CRPS per cell
+    """
+    draws = np.sort(draws, axis=0)
+    n = draws.shape[0]
+    i = np.arange(1, n + 1)[:, None]
+    term1 = np.mean(np.abs(draws - y_obs[None, :]), axis=0)
+    term2 = np.sum((2 * i - n - 1) * draws, axis=0) / (n ** 2)
+
+    return term1 - term2
+
+
+def rmse_eval(pred, y_obs):
+    """
+    pred: (n_cells,) predicted values
+    y_obs: (n_cells,) observed values (the NaN triangle, now realized/held out)
+    returns: (n_cells,) RMSE per cell
+    """
+    return np.sqrt(np.mean((pred - y_obs) ** 2, axis=0))
