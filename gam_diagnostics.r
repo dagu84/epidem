@@ -3,14 +3,18 @@ library(dplyr)
 
 # data import
 data = read.csv('data/untrimmed_data.csv')
+data
 
 # cutoff
-t_cutoff = 30
+end_cutoff = 60
+start_cutoff = 30
 
 # applying cutoff
 data = data %>%
-  mutate(n_td_true = n_td, observed = (t + d) <= t_cutoff,
-         n_td = ifelse(observed, n_td, NA)) %>% filter(t <= t_cutoff)
+  mutate(n_td_true = n_td,
+         observed = (t + d) <= end_cutoff & (t + d) >= start_cutoff,
+         n_td = ifelse(observed, n_td, NA)) %>%
+  filter(t <= end_cutoff, t >= start_cutoff)
 
 # GAM
 model = gam(

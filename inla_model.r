@@ -3,7 +3,8 @@ library(dplyr)
 
 # importing arguments from python function
 args = commandArgs(trailingOnly = TRUE)
-t_cutoff = as.integer(args[2])
+start_cutoff = as.integer(args[2])
+end_cutoff = as.integer(args[3])
 data_path = args[1]
 
 # loading the data
@@ -12,9 +13,16 @@ data$date = as.Date(data$date)
 
 # apply cutoff
 data = data %>%
-  mutate(n_td_true=n_td, observed=(t + d) <= t_cutoff,
-         n_td=ifelse(observed, n_td, NA), Y=n_td, Time=t, Delay=d, Time2=t, Delay2=d + 1,
-         WeekOfYear=week_of_year) %>% filter(t <= t_cutoff)
+  mutate(n_td_true = n_td,
+         observed = (t + d) <= end_cutoff & (t + d) >= start_cutoff,
+         n_td = ifelse(observed, n_td, NA),
+         Y = n_td,
+         Time = t,
+         Delay = d,
+         Time2 = t,
+         Delay2 = d + 1,
+         WeekOfYear = week_of_year) %>%
+  filter(t <= end_cutoff, t >= start_cutoff)
 
 # index of missing cells for INLA to predict
 index.missing = which(is.na(data$Y))
@@ -76,7 +84,7 @@ output_dir = dirname(data_path)
 # cell-level point predictions
 data$pred = rowMeans(cell_samples_mat)
 write.csv(data,
-          file.path(output_dir, paste0("inla_pred_", t_cutoff, ".csv")),
+          file.path(output_dir, paste0("inla_pred_", end_cutoff, ".csv")),
           row.names = FALSE)
 
 # weekly posterior samples (summed across delays)
@@ -84,5 +92,5 @@ weekly_samples_mat = apply(cell_samples_mat, 2, function(sim) {
   tapply(sim, data$date, sum)
 })
 write.csv(as.data.frame(weekly_samples_mat),
-          file.path(output_dir, paste0("inla_posterior_", t_cutoff, ".csv")),
+          file.path(output_dir, paste0("inla_posterior_", end_cutoff, ".csv")),
           row.names = TRUE)

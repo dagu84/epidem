@@ -58,7 +58,7 @@ def run_mem(r_path:str, data_path:str, disease:str):
     return df
 
 
-def create_and_train_gam(r_path:str, data_path:str, cutoff:int):
+def create_and_train_gam(r_path:str, data_path:str, end_cutoff:int):
     """
     Run the GAM nowcasting model in R for a given T_cutoff.
     Passes the cutoff value as a command-line argument to the R script.
@@ -79,10 +79,11 @@ def create_and_train_gam(r_path:str, data_path:str, cutoff:int):
     """
     r_path = _resolve_r_path(r_path)
     data_path = _resolve_data_path(data_path)
+    start_cutoff = int(end_cutoff - 30)
 
     # running the file script
     output = subprocess.run(
-        ['Rscript', f'{r_path}', data_path, str(cutoff)],
+        ['Rscript', f'{r_path}', data_path, str(start_cutoff), str(end_cutoff)],
         capture_output=True, text=True)
 
     # testing if the file ran successfully
@@ -95,14 +96,14 @@ def create_and_train_gam(r_path:str, data_path:str, cutoff:int):
         return None
 
     # save the R output
-    pred = pd.read_csv(os.path.join(os.path.dirname(data_path), f"gam_pred_{cutoff}.csv"),parse_dates=["date"])
-    ci = pd.read_csv(os.path.join(os.path.dirname(data_path), f"gam_ci_{cutoff}.csv"),parse_dates=["date"])
-    posterior = pd.read_csv(os.path.join(os.path.dirname(data_path), f"gam_posterior_{cutoff}.csv"),index_col=0)
+    pred = pd.read_csv(os.path.join(os.path.dirname(data_path), f"gam_pred_{end_cutoff}.csv"),parse_dates=["date"])
+    ci = pd.read_csv(os.path.join(os.path.dirname(data_path), f"gam_ci_{end_cutoff}.csv"),parse_dates=["date"])
+    posterior = pd.read_csv(os.path.join(os.path.dirname(data_path), f"gam_posterior_{end_cutoff}.csv"),index_col=0)
 
     return pred, ci, posterior
 
 
-def create_and_train_inla(r_path:str, data_path:str, cutoff:int):
+def create_and_train_inla(r_path:str, data_path:str, end_cutoff:int):
     """
     Run the INLA nowcasting model in R for a given T_cutoff.
     Passes the cutoff value as a command-line argument to the R script.
@@ -122,10 +123,11 @@ def create_and_train_inla(r_path:str, data_path:str, cutoff:int):
     """
     r_path = _resolve_r_path(r_path)
     data_path = _resolve_data_path(data_path)
+    start_cutoff = int(end_cutoff - 30)
 
     # running the file script
     output = subprocess.run(
-        ['Rscript', f'{r_path}', data_path, str(cutoff)],
+        ['Rscript', f'{r_path}', data_path, str(start_cutoff), str(end_cutoff)],
         capture_output=True, text=True)
 
     # testing if the file ran successfully
@@ -138,7 +140,7 @@ def create_and_train_inla(r_path:str, data_path:str, cutoff:int):
         return None
 
     # save the R output
-    pred = pd.read_csv(os.path.join(os.path.dirname(data_path), f"inla_pred_{cutoff}.csv"),parse_dates=["date"])
-    posterior = pd.read_csv(os.path.join(os.path.dirname(data_path), f"inla_posterior_{cutoff}.csv"),index_col=0)
+    pred = pd.read_csv(os.path.join(os.path.dirname(data_path), f"inla_pred_{end_cutoff}.csv"),parse_dates=["date"])
+    posterior = pd.read_csv(os.path.join(os.path.dirname(data_path), f"inla_posterior_{end_cutoff}.csv"),index_col=0)
 
     return pred, posterior

@@ -3,7 +3,8 @@ library(dplyr)
 
 # importing arguments from python function
 args = commandArgs(trailingOnly = TRUE)
-t_cutoff = as.integer(args[2])
+start_cutoff = as.integer(args[2])
+end_cutoff = as.integer(args[3])
 data_path = args[1]
 
 # loading the data
@@ -12,8 +13,10 @@ data$date = as.Date(data$date)
 
 # applying cutoff
 data = data %>%
-  mutate(n_td_true = n_td, observed = (t + d) <= t_cutoff,
-         n_td = ifelse(observed, n_td, NA)) %>% filter(t <= t_cutoff)
+  mutate(n_td_true = n_td,
+         observed = (t + d) <= end_cutoff & (t + d) >= start_cutoff,
+         n_td = ifelse(observed, n_td, NA)) %>%
+  filter(t <= end_cutoff, t >= start_cutoff)
 
 # GAM
 model = gam(
@@ -25,7 +28,7 @@ model = gam(
 
 # predict
 data$pred = predict(model,newdata=data,type="response")
-write.csv(data, file.path(dirname(data_path), paste0("gam_pred_", t_cutoff, ".csv")), row.names = FALSE)
+write.csv(data, file.path(dirname(data_path), paste0("gam_pred_", end_cutoff, ".csv")), row.names = FALSE)
 
 # posterior
 beta_hat = coef(model)
@@ -48,6 +51,6 @@ N_hi = apply(weekly_samples, 1, quantile, 0.975)
 # export
 nowcast = data.frame(date = as.Date(rownames(weekly_samples)), N_hat = N_hat, N_lo  = N_lo, N_hi  = N_hi)
 
-write.csv(nowcast, file.path(dirname(data_path), paste0("gam_ci_", t_cutoff, ".csv")), row.names = FALSE)
+write.csv(nowcast, file.path(dirname(data_path), paste0("gam_ci_", end_cutoff, ".csv")), row.names = FALSE)
 
-write.csv(as.data.frame(weekly_samples), file.path(dirname(data_path), paste0("gam_posterior_", t_cutoff, ".csv")), row.names = TRUE)
+write.csv(as.data.frame(weekly_samples), file.path(dirname(data_path), paste0("gam_posterior_", end_cutoff, ".csv")), row.names = TRUE)
