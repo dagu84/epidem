@@ -20,7 +20,7 @@ data = data %>%
 
 # GAM
 model = gam(
-  n_td ~ s(t, k=40, bs='ps', m=1) + s(d, k=10, bs='ps', m=1) + ti(d, t),
+  n_td ~ s(t, k=90, bs='ps', m=c(1,3)) + s(d, k=10, bs='ps', m=c(1,3)) + ti(d, t),
   family=nb(link='log'),
   data=data,
   subset=observed,

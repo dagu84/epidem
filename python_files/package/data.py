@@ -75,6 +75,37 @@ def process_to_triangle(df:pd.DataFrame, d:int=10):
     return data
 
 
+def process_dados(df:pd.DataFrame, d:int=10):
+    data = df.copy()
+    data = data.drop(columns=['SG_UF_NOT'])
+    data = data.rename(columns={'DS_UF_SIGLA': 'state'})
+
+    # changing data format
+    data['date_onset']  = pd.to_datetime(data['date_onset'])
+    data['date_report'] = pd.to_datetime(data['date_report'])
+    data['delay'] = (data['date_report'] - data['date_onset']).dt.days // 7
+    data = data.rename(columns={'delay':'d', 'date_onset':'date'})
+
+    # keeping the number of delays (weeks) specified
+    data = data[data['d'] <= d].copy()
+    counts = (data.groupby(['date', 'd', 'state']).size().reset_index(name='n_td'))
+    all_dates = pd.date_range(counts['date'].min(), counts['date'].max(), freq='W-MON')
+    all_states = counts['state'].unique()
+    grid = pd.MultiIndex.from_product([all_dates, range(d + 1), all_states],names=['date', 'd', 'state']).to_frame(index=False)
+    data = grid.merge(counts, on=['date', 'd', 'state'], how='left').fillna({'n_td': 0})
+
+    # creating time feature
+    data['t'] = data['date'].rank(method='dense').astype(int)
+    data['week_of_year'] = data['date'].dt.isocalendar().week.astype(int)
+    data.loc[data['week_of_year'] == 53, 'week_of_year'] = 52
+
+    # filtering to the selected columns
+    data = data[['date', 't', 'd', 'week_of_year', 'state', 'n_td']]
+    data['n_td'] = data['n_td'].astype(int)
+
+    return data
+
+
 def to_mem_format(df:pd.DataFrame, date_col:str="date", value_col:bool="n_td"):
     """
     Transform a long-format case-count dataframe into the wide format
